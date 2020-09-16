@@ -1,0 +1,104 @@
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: packetbeat-config-pv-volume
+  labels:
+    pv: packetbeat-config-pv-volume
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  nfs:
+    server: 192.168.2.89
+    path: "/home/luqin/data/packetbeat/config"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: packetbeat-config-pv-claim
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  selector:
+    matchLabels:
+      pv: packetbeat-config-pv-volume
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: packetbeat
+# spec:
+#   type: NodePort
+#   ports:
+#   - port: 5601
+#     targetPort: 5601
+#     nodePort: 5601
+#   selector:
+#     name: packetbeat
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: packetbeat
+spec:
+  replicas: 1
+  minReadySeconds: 30
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      name: packetbeat
+  template:
+    metadata:
+      labels:
+        name: packetbeat
+        group: elastic
+    spec:
+      containers:
+      - name: packetbeat
+        image: elastic/packetbeat:7.7.1
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          # runAsUser:
+          #   rule: "MustRunAsNonRoot"
+          capabilities:
+            add:
+            - NET_ADMIN
+            - NET_RAW
+            # drop:
+            # - KILL
+        # ports:
+        # - containerPort: 5601
+        # envFrom:
+        #   - configMapRef:
+        #       name: datacleaning-proxy-configmaps
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/packetbeat/packetbeat.yml
+          subPath: packetbeat.yml
+          # readOnly: true
+        # resources:
+        #   limits:
+        #     cpu: 10
+        #     memory: 8096Mi
+        #   requests:
+        #     cpu: 2
+        #     memory: 4096Mi
+        # command: ["sleep", "10000000"]
+      volumes:
+      - name: config
+        persistentVolumeClaim:
+          claimName: packetbeat-config-pv-claim
+        # nodeSelector:
+        #   datacleaning-proxy: "true"
